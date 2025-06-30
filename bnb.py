@@ -1,104 +1,142 @@
 import torch
 import time
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+import numpy as np
+from transformers import AutoModelForSequenceClassification, AutoTokenizer, BitsAndBytesConfig
+from datasets import load_dataset
 
-def get_quant_config(precision):
-    if precision == "int8":
-        return BitsAndBytesConfig(load_in_8bit=True)
-    elif precision == "int4":
-        return BitsAndBytesConfig(
+MODEL_PATH = "qwen3-ft"  
+
+def parameter_memory_usage_gb(model):
+    total = sum(p.numel() * p.element_size() for p in model.parameters())
+    buffers = sum(b.numel() * b.element_size() for b in model.buffers())
+    return (total + buffers) / (1024 ** 3)  # GB
+
+
+def evaluate_accuracy(model, tokenizer, num_samples=200):
+    model.eval()
+    dataset = load_dataset("imdb", split="test").select(range(num_samples))
+    preds, labels = [], []
+    for item in dataset:
+        inputs = tokenizer(
+            item["text"],
+            truncation=True,
+            padding='max_length',  # Fixed padding
+            max_length=512,
+            return_tensors="pt"
+        ).to(model.device)
+        with torch.no_grad():
+            logits = model(**inputs).logits
+        pred = torch.argmax(logits, dim=-1).item()
+        preds.append(pred)
+        labels.append(item["label"])
+    return np.mean(np.array(preds) == np.array(labels))
+
+def measure_latency_throughput(model, tokenizer, num_samples=50):
+    model.eval()
+    # Load IMDB test dataset with a limited number of samples
+    imdb_test_samples = load_dataset("imdb", split="test").select(range(num_samples))
+    texts = [item["text"] for item in imdb_test_samples]
+    inputs = tokenizer(
+        texts,
+        truncation=True,
+        padding='max_length',  # Crucial fix
+        max_length=512,
+        return_tensors="pt"
+    ).to(model.device)
+    
+    with torch.no_grad():
+        # Warmup
+        _ = model(**{k: v[:1] for k, v in inputs.items()})
+        torch.cuda.reset_peak_memory_stats()
+        start = time.time()
+        outputs = model(**inputs)  # Fixed batch processing
+        end = time.time()
+    
+    total_time = end - start
+    avg_latency = total_time / num_samples
+    throughput = num_samples / total_time
+    peak_mem = torch.cuda.max_memory_allocated() / (1024 ** 2)  # MB
+    return avg_latency, throughput, peak_mem
+
+def load_model(quant_type, tokenizer):
+    if quant_type == "fp16":
+        model = AutoModelForSequenceClassification.from_pretrained(
+            MODEL_PATH,
+            torch_dtype=torch.float16,
+            device_map="auto",
+            trust_remote_code=True
+        )
+    elif quant_type == "bf16":
+        model = AutoModelForSequenceClassification.from_pretrained(
+            MODEL_PATH,
+            torch_dtype=torch.bfloat16,
+            device_map="auto",
+            trust_remote_code=True
+        )
+    elif quant_type == "int8":
+        bnb_config = BitsAndBytesConfig(load_in_8bit=True)
+        model = AutoModelForSequenceClassification.from_pretrained(
+            MODEL_PATH,
+            quantization_config=bnb_config,
+            device_map="auto",
+            trust_remote_code=True
+        )
+    elif quant_type == "int4":
+        bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
-            bnb_4bit_use_double_quant=True,
             bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.bfloat16,
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_compute_dtype=torch.bfloat16
+        )
+        model = AutoModelForSequenceClassification.from_pretrained(
+            MODEL_PATH,
+            quantization_config=bnb_config,
+            device_map="auto",
+            trust_remote_code=True
         )
     else:
-        return None
+        raise ValueError("Unknown quant_type")
+    
+    # Set pad token in model config
+    model.config.pad_token_id = tokenizer.pad_token_id
+    return model
 
-def benchmark(model_name, precision):
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    quant_config = get_quant_config(precision)
-    dtype = None
-    if precision == "fp16":
-        dtype = torch.float16
-    elif precision == "bf16":
-        dtype = torch.bfloat16
-
-    # Clear CUDA stats
-    if device == "cuda":
+def main():
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
+    
+    # Ensure tokenizer has pad token
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    
+    results = {}
+    for quant_type in ["fp16", "bf16", "int8", "int4"]: # edit this if you want only one type
+        print(f"\n--- Evaluating {quant_type.upper()} ---")
+        model = load_model(quant_type, tokenizer)
+        param_mem = parameter_memory_usage_gb(model)
+        accuracy = evaluate_accuracy(model, tokenizer)
+        avg_latency, throughput, peak_mem = measure_latency_throughput(model, tokenizer)
+        
+        results[quant_type] = {
+            "Parameter Memory (GB)": param_mem,
+            "Peak Inference Memory (MB)": peak_mem,
+            "Accuracy": accuracy,
+            "Avg Latency (s)": avg_latency,
+            "Throughput (samples/s)": throughput
+        }
+        
+        print(f"Parameter Memory: {param_mem:.2f} GB")
+        print(f"Peak Inference Memory: {peak_mem:.2f} MB")
+        print(f"Accuracy: {accuracy:.4f}")
+        print(f"Avg Latency: {avg_latency:.4f} s")
+        print(f"Throughput: {throughput:.2f} samples/s")
         torch.cuda.empty_cache()
-        torch.cuda.reset_peak_memory_stats()
+    
+    # Print summary table
+    print("\n=== Summary ===")
+    print(f"{'Version':<8} | {'Param Mem (GB)':<15} | {'Peak Mem (MB)':<15} | {'Accuracy':<9} | {'Latency(s)':<10} | {'Throughput':<10}")
+    print("-"*75)
+    for qt, res in results.items():
+        print(f"{qt.upper():<8} | {res['Parameter Memory (GB)']:<15.2f} | {res['Peak Inference Memory (MB)']:<15.2f} | {res['Accuracy']:<9.4f} | {res['Avg Latency (s)']:<10.4f} | {res['Throughput (samples/s)']:<10.2f}")
 
-    # Load model
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        device_map="auto",
-        quantization_config=quant_config,
-        torch_dtype=dtype,
-        trust_remote_code=True,
-    )
-    tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
-    model.eval()
-
-    # Prepare input
-    prompt = "Explain quantum computing in simple terms."
-    model_device = next(model.parameters()).device
-    inputs = tokenizer(prompt, return_tensors="pt").to(model_device)
-
-
-    # Warmup
-    with torch.no_grad():
-        _ = model.generate(**inputs, max_new_tokens=5)
-
-    # Measure memory before inference
-    if device == "cuda":
-        start_mem = torch.cuda.memory_allocated()
-    else:
-        start_mem = model.get_memory_footprint()
-
-    # Timed inference
-    num_runs = 5
-    total_time = 0
-    for _ in range(num_runs):
-        torch.cuda.synchronize() if device == "cuda" else None
-        start = time.perf_counter()
-        with torch.no_grad():
-            outputs = model.generate(**inputs, max_new_tokens=50)
-        torch.cuda.synchronize() if device == "cuda" else None
-        total_time += time.perf_counter() - start
-
-    # Peak memory
-    if device == "cuda":
-        peak_mem = torch.cuda.max_memory_allocated()
-        total_mem_used = (peak_mem - start_mem) / 1024**3
-    else:
-        total_mem_used = (model.get_memory_footprint() - start_mem) / 1024**3
-
-    # Parameter memory
-    param_mem = sum(p.numel() * p.element_size() for p in model.parameters()) / 1024**3
-
-    # Throughput
-    tokens_generated = outputs.shape[1] - inputs.input_ids.shape[1]
-    avg_latency = total_time / num_runs
-    tokens_per_sec = tokens_generated / avg_latency
-
-    return {
-        "precision": precision,
-        "param_mem_gb": param_mem,
-        "peak_inference_mem_gb": total_mem_used,
-        "avg_latency_s": avg_latency,
-        "tokens_per_sec": tokens_per_sec,
-        "tokens_generated": tokens_generated,
-    }
-
-model_name = "Qwen/Qwen3-8B"
-results = []
-for precision in ["fp16", "bf16", "int8", "int4"]:
-    print(f"Benchmarking {precision.upper()}...")
-    res = benchmark(model_name, precision)
-    results.append(res)
-
-print("\n| Precision | Param Mem (GB) | Peak Inf Mem (GB) | Avg Latency (s) | Tokens/sec |")
-print("|-----------|----------------|-------------------|-----------------|------------|")
-for r in results:
-    print(f"| {r['precision'].upper():<9} | {r['param_mem_gb']:.2f}         | {r['peak_inference_mem_gb']:.2f}            | {r['avg_latency_s']:.2f}           | {r['tokens_per_sec']:.2f}      |")
+if __name__ == "__main__":
+    main()
