@@ -9,11 +9,10 @@ calibration_dataset = load_dataset(
     split="train"
 ).select(range(1024))["text"]
 
-quant_config = QuantizeConfig(bits=4, group_size=128)
+quant_config = QuantizeConfig(bits=4, group_size=128) # for 8 bit, let bits=8
 
 model = GPTQModel.load(model_id, quant_config)
 
-# increase `batch_size` to match gpu/vram specs to speed up quantization
 model.quantize(calibration_dataset, batch_size=2)
 
 model.save(quant_path)
@@ -80,7 +79,7 @@ def measure_latency(model, inputs, num_warmup=1, num_runs=10):
     return avg_latency
 
 
-# THROUGHPUT (samples/sec, for reference)
+# THROUGHPUT (samples/sec)
 def measure_throughput(model, inputs, num_iter=10, num_warmup=2):
     with torch.no_grad():
         # Warmup
