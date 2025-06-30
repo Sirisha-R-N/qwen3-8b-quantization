@@ -20,7 +20,7 @@ def evaluate_accuracy(model, tokenizer, num_samples=200):
         inputs = tokenizer(
             item["text"],
             truncation=True,
-            padding='max_length',  # Fixed padding
+            padding='max_length',  
             max_length=512,
             return_tensors="pt"
         ).to(model.device)
@@ -39,7 +39,7 @@ def measure_latency_throughput(model, tokenizer, num_samples=50):
     inputs = tokenizer(
         texts,
         truncation=True,
-        padding='max_length',  # Crucial fix
+        padding='max_length',  
         max_length=512,
         return_tensors="pt"
     ).to(model.device)
@@ -49,7 +49,7 @@ def measure_latency_throughput(model, tokenizer, num_samples=50):
         _ = model(**{k: v[:1] for k, v in inputs.items()})
         torch.cuda.reset_peak_memory_stats()
         start = time.time()
-        outputs = model(**inputs)  # Fixed batch processing
+        outputs = model(**inputs)  
         end = time.time()
     
     total_time = end - start
