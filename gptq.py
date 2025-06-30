@@ -1,8 +1,8 @@
 from datasets import load_dataset
 from gptqmodel import GPTQModel, QuantizeConfig
 
-model_id = "merged_qwen3-8b"
-quant_path = "gptq-4"
+model_id = "qwen3-8b" # replace with your model path
+quant_path = "gptq-4" # replace with the destination path
 
 calibration_dataset = load_dataset(
     "imdb",
