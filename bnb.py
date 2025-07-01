@@ -4,7 +4,7 @@ import numpy as np
 from transformers import AutoModelForSequenceClassification, AutoTokenizer, BitsAndBytesConfig
 from datasets import load_dataset
 
-MODEL_PATH = "qwen3-ft"  
+MODEL_PATH = "qwen3-ft"  # replace with your model
 
 def parameter_memory_usage_gb(model):
     total = sum(p.numel() * p.element_size() for p in model.parameters())
