@@ -1,3 +1,4 @@
+# This file contains 2 sets of code - one for GPTQ, other for evaluation
 from datasets import load_dataset
 from gptqmodel import GPTQModel, QuantizeConfig
 
@@ -18,13 +19,14 @@ model.quantize(calibration_dataset, batch_size=2)
 model.save(quant_path)
 
 
+# Run the below code separately 
 # Evaluating latency, memory usage, throughput
 import torch
 import time
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
 # CONFIGURATION
-MODEL_PATH = "gptq-4"  
+MODEL_PATH = "gptq-4"  # replace with your gptq quantized model
 BATCH_SIZE = 1               
 SEQ_LENGTH = 128
 NUM_ITERATIONS = 20          
