@@ -1,6 +1,6 @@
 # Qwen3-8B Quantization Evaluation
 
-This project benchmarks and analyzes the performance of the **Qwen-8B** Large Language Model in various **quantized forms (INT8 and INT4)** compared to its **full-precision (FP16/FP32)** counterpart.
+This project benchmarks and analyzes the performance of the **Qwen3-8B** Large Language Model in various **quantized forms (INT8 and INT4)** compared to its **full-precision (FP16/FP32)** counterpart.
 
 The primary goal is to understand the trade-offs between **inference latency, memory usage, and task accuracy** when deploying quantized models. This helps assess the feasibility of using Qwen-8B in resource-constrained production environments.
 
