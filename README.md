@@ -8,7 +8,7 @@ The primary goal is to understand the trade-offs between **inference latency, me
 
 ## Project Objectives
 
--  Apply **Post-Training Quantization (PTQ)** and **Quantization-Aware Training (QAT)** on Qwen-8B using popular tools (BitsAndBytes, AWQ, etc.)
+-  Apply **Post-Training Quantization (PTQ)** and **Quantization-Aware Training (QAT)** on Qwen-8B using popular tools (BitsAndBytes, GPTQ, etc.)
 -  Benchmark **inference latency, throughput, and memory usage** on an NVIDIA H100 GPU
 -  Evaluate model performance on a downstream task (e.g., sentiment classification using IMDb dataset)
 -  Analyze trade-offs between **model size, speed, and accuracy**
