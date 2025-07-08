@@ -39,7 +39,7 @@ model = AutoModelForSequenceClassification.from_pretrained(
     torch_dtype=torch.float16
 ).eval()
 
-# ENSURE PAD TOKEN IS SET (required for batch processing)
+# ENSURE PAD TOKEN IS SET 
 if tokenizer.pad_token is None:
     tokenizer.pad_token = tokenizer.eos_token
 model.config.pad_token_id = tokenizer.pad_token_id
