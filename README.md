@@ -16,7 +16,7 @@ The primary goal is to understand the trade-offs between **inference latency, me
 
 ---
 
-## Dependencies
+<!--## Dependencies
 
 We recommend using a Conda environment or virtualenv.
 
@@ -31,5 +31,5 @@ pip install -r requirements.txt
 conda create -n qwen3_quant python=3.10
 conda activate qwen3_quant
 pip install -r requirements.txt
-```
+``` -->
 
