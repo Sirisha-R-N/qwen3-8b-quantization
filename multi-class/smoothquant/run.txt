@@ -1,0 +1,13 @@
+python smoothquant/examples/generate_act_scales.py \
+    --model-name /home/jovyan/fashion-merged \
+    --output-path /home/jovyan/act_scales.json \
+    --num-samples 128 \
+    --seq-len 128 \
+    --dataset-path /home/jovyan/calib.json
+
+
+python smoothquant/examples/export_int8_model.py \
+    --model-name /home/jovyan/fashion-merged \
+    --act-scales-path /home/jovyan/act_scales.json \
+    --save-dir /home/jovyan/smoothquant_model_output \
+    --alpha 0.5
