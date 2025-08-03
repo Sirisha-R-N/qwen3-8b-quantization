@@ -12,7 +12,6 @@ The primary goal is to understand the trade-offs between **inference latency, me
 -  Benchmark **inference latency, throughput, and memory usage** on an NVIDIA H100 GPU
 -  Evaluate model performance on a downstream task (e.g., sentiment classification using IMDb dataset)
 -  Analyze trade-offs between **model size, speed, and accuracy**
--  Provide **clean, reproducible, notebook-based code** suitable for collaboration and easy experimentation
 
 ---
 
